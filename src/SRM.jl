@@ -1,5 +1,5 @@
 module SRM
 
-using BaseStats
+using MLBase
 
 end
