@@ -1,3 +1,9 @@
+<<<<<<< HEAD
 julia 0.5
 MLBase 0.6.1
 MLKernels 0.1.0
+=======
+julia 0.4.7
+MLBase 0.6.1
+MLKernels 0.1.0
+>>>>>>> df199c393486ac127c4582f764abb95d5569efd9
