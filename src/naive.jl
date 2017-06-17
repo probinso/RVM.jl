@@ -23,6 +23,7 @@ type RVMFit{R <: Real}
     converged::Bool
     steps::Integer
     w::Vector{R}
+    RV::Matrix{R}
 end
 
 function whitening(Obs::AbstractMatrix)
@@ -84,7 +85,7 @@ function fit{R <: Real}(S::RVMSpec, Obs::AbstractMatrix{R}, ObsT::AbstractVector
         if !any(keep)
             keep[1] = true
         end
-        keep[end] = true
+        keep[end] = true # save bias
 
         # downselect uninformative vectors
         α₀ = α₀[keep]
@@ -95,7 +96,7 @@ function fit{R <: Real}(S::RVMSpec, Obs::AbstractMatrix{R}, ObsT::AbstractVector
         w  = w[keep]
         RV = RV[keep[1:end-1], :]
 
-        # 
+        #
         if maximum(abs(α .- α₀)) < S.tol
             steps = i
             succ  = true
@@ -104,12 +105,11 @@ function fit{R <: Real}(S::RVMSpec, Obs::AbstractMatrix{R}, ObsT::AbstractVector
         α₀ = α[1:end]
     end
 
-    modelfit::RVMFit{R} = RVMFit(S.kernel, normalize, encode, succ, steps, w)
+    modelfit::RVMFit{R} = RVMFit(S.kernel, normalize, encode, succ, steps, w, RV)
 end
 
-function _classify(w::AbstractVector, ϕ::AbstractMatrix)
+@inline _classify(w::AbstractVector, ϕ::AbstractMatrix) =
     [expit(x) for x in ϕ * w]
-end
 
 function _log_posterior(w::AbstractMatrix, α::AbstractVector,
                         ϕ::AbstractMatrix, t::AbstractVector)
@@ -140,84 +140,8 @@ function _posterior(w::AbstractVector, α::AbstractVector,
     w, Σ
 end
 
-#=
-def _log_posterior(self, m, alpha, phi, t):
-
-        y = self._classify(w, phi)
-
-        log_p = -1 * (np.sum(np.log(y[t == 1]), 0) +
-                      np.sum(np.log(1-y[t == 0]), 0))
-        log_p = log_p + 0.5*np.dot(w.T, np.dot(np.diag(alpha), m))
-
-        jacobian = np.dot(np.diag(alpha), m) - np.dot(phi.T, (t-y))
-
-        return log_p, jacobian
-=#
-
 Train, TrainT = get_data("../data/training.csv", :class)
 spec  = RVMSpec(MLKernels.GaussianKernel(), 10, whitening, 1e9, 1e-3)
 model = fit(spec, Train, TrainT)
 
 #Test, TestT = get_data("../data/testing.csv", :class)
-
-#=
-function prune(X, α, ϕ, σ, thresh)
-    keep = α .< M.thresh
-    X[keep, :], α[keep], ϕ[:, keep], σ...
-
-
-function fit{R <: Real}
-    (w::RVMSpec, Obs::AbstractMatrix{R}, ObsT::AbstractVector)
-
-    # sample count, features
-    n, p = size(Obs)
-
-    normalize = M.normalizer(Obs)
-    X = normalize(Obs)
-
-    lm = labelmap(ObsT)
-    encode(V) = labelencode(lm, V)
-    T  = encode(ObsT)
-
-    ϕ = MLKernels.kernelmatrix(w.kernel, X, X)
-
-    basis_count = size(ϕ, 2)
-    α = ones(basis_count) ./ basis_count
-    β = 1e-6
-
-    w = zeros(basis_count)
-
-    for i in 1:M.n_iter
-
-    end
-end
-
-
-function unknown(X, α, ϕ, t)
-    A = diagm(α)
-    y = classify(X, ϕ)
-    B = diagm(y * (1 - y))
-    C = B + ϕ * A * ϕ'
-
-    ∇(w) = ϕ' * (t - y) - A * w
-    ∇∇   = -1 *  (ϕ' * B * ϕ + A)
-
-    w★ = inv(A) * ϕ' * (t - y)
-    Σ  = inv(ϕ' * B * ϕ + A)
-
-    [(1 - α[i] * diag(Σ)[i]) / (w★[i] ^ 2) for i in 1:size(α, 1)]
-end
-
-
-IRLS(w, H,
-
-function gradient(X, α, ϕ, t)
-    A = diagm(α)
-
-∇  = gradient(X, α, ϕ, t)
-
-    = hessian(X, α, ϕ, t)
-
-posterior(
-
-=#
