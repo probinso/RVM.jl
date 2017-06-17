@@ -1,8 +1,7 @@
-using Convex
 using MLBase
 using MLKernels
-using Compat
 using DataFrames
+#using Convex
 
 __precompile__()
 
@@ -33,6 +32,10 @@ function whitening(Obs::AbstractMatrix)
     f(M) = (M .- μ) ./ σ
 end
 
+function identitize(Obs::AbstractMatrix)
+    identity
+end
+
 function get_data(ifname::AbstractString, target::Symbol)
     data   = DataFrames.readtable(ifname)
 
@@ -55,7 +58,7 @@ function fit{R <: Real}(S::RVMSpec, Obs::AbstractMatrix{R}, ObsT::AbstractVector
 
     # standardize encoding process
     lm = labelmap(ObsT)
-    encode(V) = labelencode(lm, V)
+    encode(V) = labelencode(lm, V) .- 1
     t  = encode(ObsT)
 
     # design matrix / basis functions
@@ -65,83 +68,137 @@ function fit{R <: Real}(S::RVMSpec, Obs::AbstractMatrix{R}, ObsT::AbstractVector
 
     # initialize priors
     α₀ = ones(basis_count) .* 1e-6
-    α  = α₀[1:end]
-    w  = zeros(basis_count)
+    α₁ = α₀[1:end]
+    μ  = zeros(basis_count)
 
     # reporting information
     steps = S.n_iter
     succ  = false
 
     for i in 1:S.n_iter
-        println(size(α))
 
         # update values
-        w, Σ = _posterior(w, α, ϕ, t)
-        γ = 1 .- α .* diag(Σ)
-        α = γ ./ (w .^ 2)
+        μ, Σ = _posterior(μ, α₀, ϕ, t)
+        γ  = 1 .- (α₀ .* diag(Σ))
+        α₁ = γ ./ (μ .^ 2)
 
         # identify informative vectors
-        keep = α .< S.threshold
+        keep = α₁ .< S.threshold
         if !any(keep)
             keep[1] = true
         end
         keep[end] = true # save bias
 
+        @show sum(keep)
+
         # downselect uninformative vectors
         α₀ = α₀[keep]
-        α  = α[keep]
+        α₁ = α₁[keep]
         γ  = γ[keep]
         ϕ  = ϕ[:, keep]
         Σ  = Σ[keep, keep]
-        w  = w[keep]
+        μ  = μ[keep]
         RV = RV[keep[1:end-1], :]
 
-        #
-        if maximum(abs(α .- α₀)) < S.tol
+        # check for brreak
+        @show Δα = maximum(abs(α₁ .- α₀))
+        if Δα < S.tol
             steps = i
             succ  = true
             break
         end
-        α₀ = α[1:end]
+        α₀ = α₁[1:end]
     end
 
-    modelfit::RVMFit{R} = RVMFit(S.kernel, normalize, encode, succ, steps, w, RV)
+    # Trained model as object
+    modelfit::RVMFit{R} =
+        RVMFit(S.kernel, normalize, encode, succ, steps, μ, RV)
 end
 
-@inline _classify(w::AbstractVector, ϕ::AbstractMatrix) =
-    [expit(x) for x in ϕ * w]
+function _classify(μ::AbstractVector, ϕ::AbstractMatrix)
+    @show "_classify"
+    y = [expit(x) for x in ϕ * μ]
+    y
+end
 
-function _log_posterior(w::AbstractMatrix, α::AbstractVector,
+
+function _log_posterior(w::AbstractVector, α::AbstractVector,
                         ϕ::AbstractMatrix, t::AbstractVector)
+    @show "_log_posterior"
     A = diagm(α)
     y = _classify(w, ϕ)
-    log_p = 0.5 * m' * A * w - sum(log([ y[t .== 1] (1 - y[t .== 2]) ]))
-    jacobian = A * w - ϕ' * (t - y)
-    log_p, jacobian
+    log_p = (0.5 * w' * A * w)[1] - sum(log(y[t .== 1])) - sum(log(1 - y[t .== 2]))
 end
 
 function _hessian(w::AbstractVector, α::AbstractVector,
                   ϕ::AbstractMatrix, t::AbstractVector)
+    @show "_hessian"
     A = diagm(α)
     y = _classify(w, ϕ)
     B = diagm(y .* (1 - y))
 
-    #∇(w) = ϕ' * (t - y) - A * w
-    H = -1 *  (ϕ' * B * ϕ + A)
+    H = - (ϕ' * B * ϕ + A)
+    H
 end
+
+function _jacobian(w::AbstractVector, α::AbstractVector,
+                   ϕ::AbstractMatrix, t::AbstractVector)
+    @show "_jaconian"
+    A = diagm(α)
+    y = _classify(w, ϕ)
+
+    J = A * w - ϕ' * (t - y)
+end
+
+function _gradient(w::AbstractVector, α::AbstractVector,
+                   ϕ::AbstractMatrix, t::AbstractVector)
+    @show "_gradient"
+    A = diagm(α)
+    y = _classify(w, ϕ)
+    G = ϕ' * (t .- y) - (A * w)
+    G
+end
+
+function _newton_method(X₀::AbstractVector, ∇∇::Function, ∇::Function, F::Function)
+    @show "_newton_method"
+    X₁ = X₀[1:end]
+    while true
+        X₁ = X₀ - (inv(∇∇(X₀)) * ∇(X₀))
+
+        @show F(X₁)
+        @show ΔX = sum(abs(X₁ .- X₀))
+        if ΔX < 1e-3
+            break
+        end
+        X₀ = X₁[1:end]
+    end
+    X₁
+end
+
 
 function _posterior(w::AbstractVector, α::AbstractVector,
                     ϕ::AbstractMatrix, t::AbstractVector)
-    _log_posterior
-    _hessian
+    #J = _log_posterior(w, α, ϕ, t)
     #(w, α, ϕ, t)
-    w = w #... # minimize weights with fixed priors
-    Σ = inv(_hessian(w, α, ϕ, t))
+    #=
+    w = _newton_cg_method(w,
+                       (w) -> _log_posterior(w, α, ϕ, t),
+                       (w) -> _jacobian(w, α, ϕ, t),
+                       (w) -> _hessian(w, α, ϕ, t),
+                       (w) -> _gradient(w, α, ϕ, t))
+    =#
+    w = _newton_method(w,
+                       (w) -> _hessian(w, α, ϕ, t),
+                       (w) -> _gradient(w, α, ϕ, t),
+                       (w) -> _log_posterior(w, α, ϕ, t),
+                       )
+    Σ = inv(-_hessian(w, α, ϕ, t))
     w, Σ
 end
 
+SIZE = 1000
 Train, TrainT = get_data("../data/training.csv", :class)
-spec  = RVMSpec(MLKernels.GaussianKernel(), 10, whitening, 1e9, 1e-3)
-model = fit(spec, Train, TrainT)
+spec  = RVMSpec(MLKernels.RadialBasisKernel(), 50, identitize, 1e9, 1e-3)
+model = fit(spec, Train[1:SIZE, :], TrainT[1:SIZE])
 
 #Test, TestT = get_data("../data/testing.csv", :class)
