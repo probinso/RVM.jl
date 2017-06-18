@@ -9,7 +9,6 @@
 %\usepackage{xspace}
 \usepackage{verbatim}
 %\usepackage{circuitikz}
-\usepackage{listings}
 %\usepackage{graphicx}
 %\usepackage{comment}
 %\usepackage{array}
@@ -38,7 +37,6 @@
   \item Introduce SVM
   \item Introduce RVM
   \item Bayesianization
-  \item Optimization Problem
   \item Optimization Algorithm
   \item Existing Implementations
   \item Benchmarks
@@ -73,7 +71,7 @@
   \cofeCm{0.2}{0.5}{180}{0}{3cm}
 
   \begin{quote}
-    RVMs extend SVMs by adding bayesian priors and weights to
+    RVMs extend SVMs by adding bayesian priors and weights \(\in \mathbb{R}^+\) to
     `support vectors` making `relevance vectors`.
   \end{quote}
 
@@ -87,17 +85,13 @@
   \end{itemize}
 
   \begin{quote}
-    Priors on vector weights nullify the need for cost parameters
+    Priors on vector weights remove the need for cost parameters
   \end{quote}
 \end{frame}
 
 \begin{frame}{Bayesianizatoin}
   \cofeAm{0.05}{0.5}{0}{3.5cm}{-2cm}
   \cofeCm{0.1}{0.5}{180}{0}{3cm}
-
-  \begin{quote}
-    
-  \end{quote}
 
   \begin{align*}
     \Phi &= \texttt{user kernel of machine} \\
@@ -108,45 +102,63 @@
     y(\vec{x}; \vec{w}) &= \sum_{i=1}^N w_i \phi_i(\vec{x}) \\
   \end{align*}
 
-  \begin{quote}
-    
-  \end{quote}
-\end{frame}
-
-\begin{frame}{Optimization Problem}
-  
 \end{frame}
 
 \begin{frame}{Optimization Algorithm}
+
   \begin{itemize}
-  \item Iteratively Reweighted Least Squares (IRLS)
-  \begin{itemize}
-  \item Gradient Discent
-  \item Newton's Method
-  \item Gra
+  \item Loop - Iterative Reqeighted Least Squares, until $\vec{\alpha}$ converges
+    \begin{itemize}
+    \item \(\mbox{argmin}_{\vec{\mu}} \mathcal{L}(\vec{\mu}; \vec{\alpha}, \Phi, \vec{t})\)
+      - Newton's Method, until $\vec{mu}$ converges
+      \[\vec{\mu}_{i+1} = \vec{\mu}_i - (\nabla\nabla\mathcal{L}_{(\vec{\mu}_i)})^{-1} * \nabla\mathcal{L}_{(\vec{\mu}_i)}\]
+    \item Iterative Re-estimation
+      \begin{align*}
+        \gamma_i &\equiv 1 - \alpha_i \Sigma_{ii}\\
+        \alpha_i^{\texttt{new}} &= \frac{\gamma_i}{\mu_i^2}
+      \end{align*}
+    \item Prune large $\alpha_i$ and cooresponding vectors from problem space
+\end{itemize}
   \end{itemize}
-  \end{itemize}
-  
 \end{frame}
 
 \begin{frame}{Existing Implementations}
+  \begin{itemize}
+  \item All use \texttt{BLAS} and \texttt{LAPACK}
+  \item Python - uses \texttt{conjugate gradient}
+  \item Matlab / C++ - Authors implementation
+  \item R
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{UCI \texttt{wilt} dataset}
+  \begin{itemize}
+  \item identify sick trees from image summary statistics
+  \item remote sensing problem
+  \item labeled data, pre-split into test and train
+  \end{itemize}
 \end{frame}
 
 \begin{frame}{Benchmarks}
 \end{frame}
 
-\begin{frame}{Notes}
+\begin{frame}{Next Steps}
   \begin{itemize}
-  \item End of Chapter
-  \item Check Defaults
-  \item Check Source Material
+  \item Extend to completely support regression
+  \item Optimizations
+    \begin{itemize}
+    \item Incorperate \texttt{JuliaOpt} libraries for deeper \texttt{julia} integration
+    \item Use \texttt{conjugate gradient}, or other faster strategy
+    \end{itemize}
+  \item Develop into \texttt{MLBase} conformant \texttt{julia} module
   \end{itemize}
 \end{frame}
 
-\begin{frame}{}
-\end{frame}
-
-\begin{frame}{}
+\begin{frame}{Notes}
+  \begin{itemize}
+  \item Check language and library defaults
+  \item Don't disregard source material
+  \end{itemize}
 \end{frame}
 
 \end{document}

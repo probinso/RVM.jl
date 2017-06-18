@@ -1,3 +1,4 @@
+
 using MLBase
 using MLKernels
 using DataFrames
@@ -47,10 +48,10 @@ end
 
 function predict{R <: Real}(Model::RVMFit, Values::AbstractMatrix{R})
     X = Model.normal(Values)
-    ϕ = MLKernels.kernelmatrix(Model.kernel, X, Model.RV)
+    _ = MLKernels.kernelmatrix(Model.kernel, X, Model.RV)
+    ϕ = [_ ones(size(_, 1))] # augment with bias
 
     P = _classify(Model.w, ϕ)
-    Y = [(1-prob') prob']
 end
 
 function fit{R <: Real}(S::RVMSpec, Obs::AbstractMatrix{R}, ObsT::AbstractVector)
@@ -134,7 +135,12 @@ function _log_posterior(w::AbstractVector, α::AbstractVector,
     @show "_log_posterior"
     A = diagm(α)
     y = _classify(w, ϕ)
-    log_p = (0.5 * w' * A * w)[1] - sum(log(y[t .== 1])) - sum(log(1 - y[t .!= 1]))
+    pos = y[t .== 1]
+    neg = y[t .!= 1]
+    @show size(pos)
+    @show size(neg)
+
+    log_p = (0.5 * w' * A * w)[1] - sum(log(pos)) - sum(log(1 - neg))
 end
 
 function _hessian(w::AbstractVector, α::AbstractVector,
@@ -160,12 +166,13 @@ end
 function _newton_method(X₀::AbstractVector, ∇∇::Function, ∇::Function, F::Function)
     @show "_newton_method"
     while true
+        @show F(X₀)
 
         X₁ = X₀ - (inv(∇∇(X₀)) * ∇(X₀))
-        X₀ = X₁[1:end]
 
         # convergence
-        ΔX = sum(abs(X₁ .- X₀))
+        ΔX = maximum(abs(X₁ .- X₀))
+        X₀ = X₁[1:end]
         if ΔX < 1e-3
             break
         end
@@ -185,15 +192,14 @@ function _posterior(w::AbstractVector, α::AbstractVector,
     w, Σ
 end
 
-SIZE = 1000 #4300
+SIZE = 2000 #1000 #4300
 Train, TrainT = get_data("../data/training.csv", :class)
 spec  = RVMSpec(MLKernels.RadialBasisKernel(), 50, identitize, 1e9, 1e-3)
 model = fit(spec, Train[1:SIZE, :], TrainT[1:SIZE])
 
-
 #spec  = RVMSpec(MLKernels.RadialBasisKernel(), 50, whitening, 1e9, 1e-3)
 #model = fit(spec, Train[1:SIZE, :], TrainT[1:SIZE])
 
-Test, TestT = get_data("../data/testing.csv", :class)
-@show predict(model, Test)
-@show TestT
+#Test, TestT = get_data("../data/testing.csv", :class)
+#@show predict(model, Test)
+#@show TestT
