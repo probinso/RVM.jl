@@ -45,6 +45,14 @@ function get_data(ifname::AbstractString, target::Symbol)
     Obs, ObsT
 end
 
+function predict{R <: Real}(Model::RVMFit, Values::AbstractMatrix{R})
+    X = Model.normal(Values)
+    ϕ = MLKernels.kernelmatrix(Model.kernel, X, Model.RV)
+
+    P = _classify(Model.w, ϕ)
+    Y = [(1-prob') prob']
+end
+
 function fit{R <: Real}(S::RVMSpec, Obs::AbstractMatrix{R}, ObsT::AbstractVector)
     # sample count, features
     n, p = size(Obs)
@@ -59,7 +67,7 @@ function fit{R <: Real}(S::RVMSpec, Obs::AbstractMatrix{R}, ObsT::AbstractVector
     # standardize encoding process
     lm = labelmap(ObsT)
     encode(V) = labelencode(lm, V) .- 1
-    t  = encode(ObsT)
+    @show t  = encode(ObsT)
 
     # design matrix / basis functions
     _ = MLKernels.kernelmatrix(S.kernel, X, X)
@@ -121,13 +129,12 @@ function _classify(μ::AbstractVector, ϕ::AbstractMatrix)
     y
 end
 
-
 function _log_posterior(w::AbstractVector, α::AbstractVector,
                         ϕ::AbstractMatrix, t::AbstractVector)
     @show "_log_posterior"
     A = diagm(α)
     y = _classify(w, ϕ)
-    log_p = (0.5 * w' * A * w)[1] - sum(log(y[t .== 1])) - sum(log(1 - y[t .== 2]))
+    log_p = (0.5 * w' * A * w)[1] - sum(log(y[t .== 1])) - sum(log(1 - y[t .!= 1]))
 end
 
 function _hessian(w::AbstractVector, α::AbstractVector,
@@ -141,15 +148,6 @@ function _hessian(w::AbstractVector, α::AbstractVector,
     H
 end
 
-function _jacobian(w::AbstractVector, α::AbstractVector,
-                   ϕ::AbstractMatrix, t::AbstractVector)
-    @show "_jaconian"
-    A = diagm(α)
-    y = _classify(w, ϕ)
-
-    J = A * w - ϕ' * (t - y)
-end
-
 function _gradient(w::AbstractVector, α::AbstractVector,
                    ϕ::AbstractMatrix, t::AbstractVector)
     @show "_gradient"
@@ -161,44 +159,41 @@ end
 
 function _newton_method(X₀::AbstractVector, ∇∇::Function, ∇::Function, F::Function)
     @show "_newton_method"
-    X₁ = X₀[1:end]
     while true
-        X₁ = X₀ - (inv(∇∇(X₀)) * ∇(X₀))
 
-        @show F(X₁)
-        @show ΔX = sum(abs(X₁ .- X₀))
+        X₁ = X₀ - (inv(∇∇(X₀)) * ∇(X₀))
+        X₀ = X₁[1:end]
+
+        # convergence
+        ΔX = sum(abs(X₁ .- X₀))
         if ΔX < 1e-3
             break
         end
-        X₀ = X₁[1:end]
     end
-    X₁
+    X₀
 end
-
 
 function _posterior(w::AbstractVector, α::AbstractVector,
                     ϕ::AbstractMatrix, t::AbstractVector)
-    #J = _log_posterior(w, α, ϕ, t)
-    #(w, α, ϕ, t)
-    #=
-    w = _newton_cg_method(w,
-                       (w) -> _log_posterior(w, α, ϕ, t),
-                       (w) -> _jacobian(w, α, ϕ, t),
-                       (w) -> _hessian(w, α, ϕ, t),
-                       (w) -> _gradient(w, α, ϕ, t))
-    =#
     w = _newton_method(w,
                        (w) -> _hessian(w, α, ϕ, t),
                        (w) -> _gradient(w, α, ϕ, t),
                        (w) -> _log_posterior(w, α, ϕ, t),
                        )
+    @show size(w)
     Σ = inv(-_hessian(w, α, ϕ, t))
     w, Σ
 end
 
-SIZE = 1000
+SIZE = 1000 #4300
 Train, TrainT = get_data("../data/training.csv", :class)
 spec  = RVMSpec(MLKernels.RadialBasisKernel(), 50, identitize, 1e9, 1e-3)
 model = fit(spec, Train[1:SIZE, :], TrainT[1:SIZE])
 
-#Test, TestT = get_data("../data/testing.csv", :class)
+
+#spec  = RVMSpec(MLKernels.RadialBasisKernel(), 50, whitening, 1e9, 1e-3)
+#model = fit(spec, Train[1:SIZE, :], TrainT[1:SIZE])
+
+Test, TestT = get_data("../data/testing.csv", :class)
+@show predict(model, Test)
+@show TestT
