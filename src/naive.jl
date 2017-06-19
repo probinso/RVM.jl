@@ -2,7 +2,6 @@
 using MLBase
 using MLKernels
 using DataFrames
-#using Convex
 
 __precompile__()
 
@@ -200,16 +199,19 @@ function _posterior(w::AbstractVector, α::AbstractVector,
     w, Σ
 end
 
-SIZE = 2300 #4300
-
+SIZE = 100, 1000, 2300, 4300
 Train, TrainT = get_data("../data/training.csv", :class)
 spec  = RVMSpec(MLKernels.RadialBasisKernel(0.5), 50, identitize, 1e5, 1e-3)
-model = fit(spec, Train[1:SIZE, :], TrainT[1:SIZE])
 
-@show mean(predict(model, Train) .== TrainT)
+for S in SIZE
+    @show S
+    @time model = fit(spec, Train[1:S, :], TrainT[1:S])
+    @show mean(predict(model, Train) .== TrainT)
+    @show size(model.RV)
 
-Test, TestT = get_data("../data/testing.csv", :class)
-@show mean(predict(model, Test) .== TestT)
+    Test, TestT = get_data("../data/testing.csv", :class)
+    @show mean(predict(model, Test) .== TestT)
+end
 
 #=
 using RDatasets

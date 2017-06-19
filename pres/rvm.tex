@@ -52,8 +52,8 @@
     \includegraphics[width=\columnwidth]{./svm_basics3.png}
     \columnbreak
 
-    SVMs hope to identify a decision boudary protected by the
-    greatest margin. Ideally information is linearly seperable, however
+    SVMs hope to identify a decision boundary protected by the
+    greatest margin. Ideally information is linearly separable, however
     in most cases you must fit a cost parameter. This is usually done
     with guesses or cross validation. {\em (expensive)}
   \end{multicols}
@@ -66,12 +66,12 @@
 
 \end{frame}
 
-\begin{frame}{Relivance Vector Machines}
+\begin{frame}{Relevance Vector Machines}
   \cofeAm{0.1}{0.5}{0}{3.5cm}{-2cm}
   \cofeCm{0.2}{0.5}{180}{0}{3cm}
 
   \begin{quote}
-    RVMs extend SVMs by adding bayesian priors and weights \(\in \mathbb{R}^+\) to
+    RVMs extend SVMs by adding Bayesian priors and weights \(\in \mathbb{R}^+\) to
     `support vectors` making `relevance vectors`.
   \end{quote}
 
@@ -89,7 +89,7 @@
   \end{quote}
 \end{frame}
 
-\begin{frame}{Bayesianizatoin}
+\begin{frame}{Bayesianization}
   \cofeAm{0.05}{0.5}{0}{3.5cm}{-2cm}
   \cofeCm{0.1}{0.5}{180}{0}{3cm}
 
@@ -107,7 +107,7 @@
 \begin{frame}{Optimization Algorithm}
 
   \begin{itemize}
-  \item Loop - Iterative Reqeighted Least Squares, until $\vec{\alpha}$ converges
+  \item Loop - Iterative Reweighted Least Squares, until $\vec{\alpha}$ converges
     \begin{itemize}
     \item \(\mbox{argmin}_{\vec{\mu}} \mathcal{L}(\vec{\mu}; \vec{\alpha}, \Phi, \vec{t})\)
       - Newton's Method, until $\vec{mu}$ converges
@@ -117,7 +117,7 @@
         \gamma_i &\equiv 1 - \alpha_i \Sigma_{ii}\\
         \alpha_i^{\texttt{new}} &= \frac{\gamma_i}{\mu_i^2}
       \end{align*}
-    \item Prune large $\alpha_i$ and cooresponding vectors from problem space
+    \item Prune large $\alpha_i$ and corresponding vectors from problem space
 \end{itemize}
   \end{itemize}
 \end{frame}
@@ -140,6 +140,9 @@
 \end{frame}
 
 \begin{frame}{Benchmarks}
+  \begin{quote}
+    to be included in report
+  \end{quote}
 \end{frame}
 
 \begin{frame}{Next Steps}
@@ -147,10 +150,10 @@
   \item Extend to completely support regression
   \item Optimizations
     \begin{itemize}
-    \item Incorperate \texttt{JuliaOpt} libraries for deeper \texttt{julia} integration
+    \item Incorporate \texttt{JuliaOpt} libraries for deeper \texttt{julia} integration
     \item Use \texttt{conjugate gradient}, or other faster strategy
     \end{itemize}
-  \item Develop into \texttt{MLBase} conformant \texttt{julia} module
+  \item Develop into \texttt{MLBase} conform-ant \texttt{julia} module
   \end{itemize}
 \end{frame}
 
@@ -158,6 +161,8 @@
   \begin{itemize}
   \item Check language and library defaults
   \item Don't disregard source material
+  \item Use your type system
+  \item Test with toy plus two `real' datasets
   \end{itemize}
 \end{frame}
 
