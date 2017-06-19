@@ -50,22 +50,19 @@ function split_data(data::DataFrame, target::Symbol)
 end
 
 function _predict_prob{R <: Real}(Model::RVMFit, Values::AbstractMatrix{R})
-    # dump('predict_proba ::', 'R', self.relevance_.shape, 'X', X.shape)
-    @show "_predict_prob" #"::", "R", size(Model.RV), "X", size(Values)
+    #@show "_predict_prob"
 
     X = Model.normal(Values)
     _ = MLKernels.kernelmatrix(Model.kernel, X, Model.RV)
     ϕ = [_ ones(size(_, 1))] # augment with bias
 
     P = _classify(Model.w, ϕ)
-    #@show summarystats(P)
-    [P (1 - P)]
+    P
 end
 
 function predict{R <: Real}(Model::RVMFit, Values::AbstractMatrix{R})
-    @show Y = _predict_prob(Model, Values)
-
-    @show Model.labelmap.vs[[Y[:, 2] .<= 0.5] .+ 1]
+    Y = convert(Vector{Int64}, (_predict_prob(Model, Values) .>= 0.5)) .+ 1
+    labeldecode(Model.labelmap, Y)
 end
 
 function fit{R <: Real}(S::RVMSpec, Obs::AbstractMatrix{R}, ObsT::AbstractVector)
@@ -111,7 +108,7 @@ function fit{R <: Real}(S::RVMSpec, Obs::AbstractMatrix{R}, ObsT::AbstractVector
         end
         keep[end] = true # save bias
 
-        @show "_prune", sum(keep), size(keep)
+        #@show "_prune", sum(keep), size(keep)
 
         # downselect uninformative vectors
         α₀ = α₀[keep]
@@ -123,7 +120,7 @@ function fit{R <: Real}(S::RVMSpec, Obs::AbstractMatrix{R}, ObsT::AbstractVector
         RV = RV[keep[1:end-1], :]
 
         # check for brreak
-        @show Δα = maximum(abs(α₁ .- α₀))
+        Δα = maximum(abs(α₁ .- α₀))
         if (Δα < S.tol) & (steps > 2)
             steps = i
             succ  = true
@@ -138,9 +135,7 @@ function fit{R <: Real}(S::RVMSpec, Obs::AbstractMatrix{R}, ObsT::AbstractVector
 end
 
 function _classify(μ::AbstractVector, ϕ::AbstractMatrix)
-    @show "_classify"
-    #@show size(ϕ), size(μ)
-    #@show size(ϕ * μ)
+    #@show "_classify"
     _ = ϕ * μ
     y = [expit(x) for x in _]
     y
@@ -148,7 +143,7 @@ end
 
 function _log_posterior(w::AbstractVector, α::AbstractVector,
                         ϕ::AbstractMatrix, t::AbstractVector)
-    @show "_log_posterior"
+    #@show "_log_posterior"
     A = diagm(α)
     y = _classify(w, ϕ)
     pos = y[t .== 1]
@@ -159,28 +154,28 @@ end
 
 function _hessian(w::AbstractVector, α::AbstractVector,
                   ϕ::AbstractMatrix, t::AbstractVector)
-    @show "_hessian"
+    #@show "_hessian"
     A = diagm(α)
     y = _classify(w, ϕ)
     B = diagm(y .* (1 - y))
 
     H = (ϕ' * B * ϕ + A)
-    @show H
+    H
 end
 
 function _gradient(w::AbstractVector, α::AbstractVector,
                    ϕ::AbstractMatrix, t::AbstractVector)
-    @show "_gradient"
+    #@show "_gradient"
     A = diagm(α)
     y = _classify(w, ϕ)
     G = ϕ' * (t .- y) - (A * w)
-    @show -G
+    -G
 end
 
 function _newton_method(X₀::AbstractVector, ∇∇::Function, ∇::Function, F::Function)
-    @show "_newton_method"
+    #@show "_newton_method"
     while true
-        @show F(X₀)
+        #@show F(X₀)
         X₁ = X₀ - inv(∇∇(X₀)) * ∇(X₀)
 
         # convergence
@@ -205,16 +200,17 @@ function _posterior(w::AbstractVector, α::AbstractVector,
     w, Σ
 end
 
-#=
-SIZE = 100 #1000 #2000 #4300
+SIZE = 2300 #4300
 
 Train, TrainT = get_data("../data/training.csv", :class)
-spec  = RVMSpec(MLKernels.RadialBasisKernel(), 50, identitize, 1e5, 1e-3)
+spec  = RVMSpec(MLKernels.RadialBasisKernel(0.5), 50, identitize, 1e5, 1e-3)
 model = fit(spec, Train[1:SIZE, :], TrainT[1:SIZE])
+
+@show mean(predict(model, Train) .== TrainT)
 
 Test, TestT = get_data("../data/testing.csv", :class)
 @show mean(predict(model, Test) .== TestT)
-=#
+
 #=
 using RDatasets
 
@@ -228,24 +224,28 @@ model = fit(spec, Train, TrainT)
 @show mean(predict(model, Train) .== TrainT)
 =#
 
-X = [1 2; 3 4] * 1.0
-Y = [5 6; 7 8] * 1.0
-#kern = MLKernels.LinearKernel(0.5)
-kern = MLKernels.RadialBasisKernel(0.5)
-_  = MLKernels.kernelmatrix(kern, X, Y)
-@show phi = [_ ones(size(_, 1))]
-alpha = ones(3)
-m = ones(3)
-t = [1, 0]
-#X = [2 1; 1 2] * 1.0
-#t = ['A', 'B']
-#spec  = RVMSpec(kern, 50, identitize, 1e9, 1e-3)
-#model = fit(spec, X, t)
-#@show predict(model, [2 1; 1 2; 0 3] * 1.0)
+function basetesting()
+    X = [1 2; 3 4] * 1.0
+    Y = [5 6; 7 8] * 1.0
+    #kern = MLKernels.LinearKernel(0.5)
+    kern = MLKernels.RadialBasisKernel(0.5)
+    _  = MLKernels.kernelmatrix(kern, X, Y)
+    phi = [_ ones(size(_, 1))]
+    alpha = ones(3)
+    m = ones(3)
+    t = [1, 0]
 
-#@show _log_posterior(m, alpha, phi, t)
-#@show _gradient(m, alpha, phi, t)
-#@show _hessian(m, alpha, phi, t)
-#@show _posterior(m, alpha, phi, t)
+    #@show _log_posterior(m, alpha, phi, t)
+    #@show _gradient(m, alpha, phi, t)
+    #@show _hessian(m, alpha, phi, t)
+    #@show _posterior(m, alpha, phi, t)
+end
 
-
+function classtest()
+    X = [2 1; 1 2] * 1.0
+    t = ['A', 'B']
+    kern = MLKernels.RadialBasisKernel(0.5)
+    spec  = RVMSpec(kern, 50, identitize, 1e9, 1e-3)
+    model = fit(spec, X, t)
+    @show predict(model, [2 1; 1 2; 0 3] * 1.0)
+end
