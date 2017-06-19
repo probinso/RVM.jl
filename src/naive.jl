@@ -5,7 +5,7 @@ using DataFrames
 
 __precompile__()
 
-@inline expit(x) = 1.0/(1.0+exp(-x))
+@inline logsig(x) = 1.0/(1.0+exp(-x))
 
 type RVMSpec
     kernel::MLKernels.Kernel
@@ -38,20 +38,18 @@ end
 
 function get_data(ifname::AbstractString, target::Symbol)
     data = DataFrames.readtable(ifname)
-    split_data(data, target)
+    split_target(data, target)
 end
 
-function split_data(data::DataFrame, target::Symbol)
+function split_target(data::DataFrame, target::Symbol)
     Obs  = convert(Matrix{Float64},
                    data[setdiff(names(data), [target])])
     ObsT = convert(Vector, data[target])
     Obs, ObsT
 end
 
-function _predict_prob{R <: Real}(Model::RVMFit, Values::AbstractMatrix{R})
-    #@show "_predict_prob"
-
-    X = Model.normal(Values)
+function _predict_prob{R <: Real}(Model::RVMFit, Features::AbstractMatrix{R})
+    X = Model.normal(Features)
     _ = MLKernels.kernelmatrix(Model.kernel, X, Model.RV)
     ϕ = [_ ones(size(_, 1))] # augment with bias
 
@@ -60,8 +58,9 @@ function _predict_prob{R <: Real}(Model::RVMFit, Values::AbstractMatrix{R})
 end
 
 function predict{R <: Real}(Model::RVMFit, Values::AbstractMatrix{R})
-    Y = convert(Vector{Int64}, (_predict_prob(Model, Values) .>= 0.5)) .+ 1
-    labeldecode(Model.labelmap, Y)
+    _ = convert(Vector{Int64}, (_predict_prob(Model, Values) .>= 0.5))
+    Y = _ .+ 1 # booleans map to {0, 1} , {en,de}coders map to {1, 2}
+    labeldecode(Model.labelmap, Y .+ 1)
 end
 
 function fit{R <: Real}(S::RVMSpec, Obs::AbstractMatrix{R}, ObsT::AbstractVector)
@@ -70,7 +69,7 @@ function fit{R <: Real}(S::RVMSpec, Obs::AbstractMatrix{R}, ObsT::AbstractVector
 
     # standardize normalizing process
     normalize = S.normalizer(Obs)
-    X  = normalize(Obs)
+    X = normalize(Obs)
 
     # Relevance Vectors
     RV = X
@@ -101,15 +100,13 @@ function fit{R <: Real}(S::RVMSpec, Obs::AbstractMatrix{R}, ObsT::AbstractVector
         α₁ = γ ./ (μ .^ 2)
 
         # identify informative vectors
-        keep = α₁ .< S.threshold
+        keep::Vector{Bool} = α₁ .< S.threshold
         if !any(keep)
-            keep[1] = true
+            keep[1] = true # require at least one vecor
         end
         keep[end] = true # save bias
 
-        #@show "_prune", sum(keep), size(keep)
-
-        # downselect uninformative vectors
+        # downselect uninformative vectors and weights
         α₀ = α₀[keep]
         α₁ = α₁[keep]
         γ  = γ[keep]
@@ -136,7 +133,7 @@ end
 function _classify(μ::AbstractVector, ϕ::AbstractMatrix)
     #@show "_classify"
     _ = ϕ * μ
-    y = [expit(x) for x in _]
+    y = [logsig(x) for x in _]
     y
 end
 
@@ -220,7 +217,7 @@ iris = dataset("datasets", "iris")
 target = :Species
 
 iris[target]  = iris[target] .== "setosa"
-Train, TrainT = split_data(iris, target)
+Train, TrainT = split_target(iris, target)
 spec  = RVMSpec(MLKernels.RadialBasisKernel(0.5), 50, identitize, 1e9, 1e-6)
 model = fit(spec, Train, TrainT)
 @show mean(predict(model, Train) .== TrainT)
