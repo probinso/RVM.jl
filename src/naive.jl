@@ -1,4 +1,3 @@
-
 using MLBase
 using MLKernels
 using DataFrames
@@ -25,7 +24,7 @@ type RVMFit{R <: Real}
     RV::Matrix{R}
 end
 
-function whitening(Obs::AbstractMatrix)
+function standard_score(Obs::AbstractMatrix)
     μ = mean(Obs, 1)
     σ = var(Obs, 1)
 
@@ -48,7 +47,7 @@ function split_target(data::DataFrame, target::Symbol)
     Obs, ObsT
 end
 
-function _predict_prob{R <: Real}(Model::RVMFit, Features::AbstractMatrix{R})
+function _predicted_probability{R <: Real}(Model::RVMFit, Features::AbstractMatrix{R})
     X = Model.normal(Features)
     _ = MLKernels.kernelmatrix(Model.kernel, X, Model.RV)
     ϕ = [_ ones(size(_, 1))] # augment with bias
@@ -58,9 +57,9 @@ function _predict_prob{R <: Real}(Model::RVMFit, Features::AbstractMatrix{R})
 end
 
 function predict{R <: Real}(Model::RVMFit, Values::AbstractMatrix{R})
-    _ = convert(Vector{Int64}, (_predict_prob(Model, Values) .>= 0.5))
+    _ = convert(Vector{Int64}, (_predicted_probability(Model, Values) .>= 0.5))
     Y = _ .+ 1 # booleans map to {0, 1} , {en,de}coders map to {1, 2}
-    labeldecode(Model.labelmap, Y .+ 1)
+    labeldecode(Model.labelmap, Y)
 end
 
 function fit{R <: Real}(S::RVMSpec, Obs::AbstractMatrix{R}, ObsT::AbstractVector)
@@ -83,10 +82,10 @@ function fit{R <: Real}(S::RVMSpec, Obs::AbstractMatrix{R}, ObsT::AbstractVector
     ϕ = [_ ones(size(_, 1))] # augment with bias
     basis_count = size(ϕ, 2)
 
-    # initialize priors
-    α₀ = ones(basis_count) .* 1e-6
-    α₁ = α₀[1:end]
+    # initialize priors N(0, 1)
     μ  = zeros(basis_count)
+    α₀ = ones(basis_count) .* 1e0
+    α₁ = α₀[1:end]
 
     # reporting information
     steps = S.n_iter
@@ -95,7 +94,7 @@ function fit{R <: Real}(S::RVMSpec, Obs::AbstractMatrix{R}, ObsT::AbstractVector
     for i in 1:S.n_iter
 
         # update values
-        μ, Σ = _posterior(μ, α₁, ϕ, t)
+        μ, Σ = _solve_post_prob(μ, α₁, ϕ, t)
         γ  = 1 - (α₁ .* diag(Σ))
         α₁ = γ ./ (μ .^ 2)
 
@@ -137,9 +136,9 @@ function _classify(μ::AbstractVector, ϕ::AbstractMatrix)
     y
 end
 
-function _log_posterior(w::AbstractVector, α::AbstractVector,
-                        ϕ::AbstractMatrix, t::AbstractVector)
-    #@show "_log_posterior"
+function _log_solve_post_prob(w::AbstractVector, α::AbstractVector,
+                               ϕ::AbstractMatrix, t::AbstractVector)
+    #@show "_log_post_probability"
     A = diagm(α)
     y = _classify(w, ϕ)
     pos = y[t .== 1]
@@ -168,10 +167,11 @@ function _gradient(w::AbstractVector, α::AbstractVector,
     -G
 end
 
-function _newton_method(X₀::AbstractVector, ∇∇::Function, ∇::Function, F::Function)
+function _newton_method(X₀::AbstractVector, F::Function, # Initial, Function
+                        ∇::Function, ∇∇::Function)       # Gradient, Hessian
     #@show "_newton_method"
     while true
-        #@show F(X₀)
+        #@show F(X₀) # uncomment to watch converge
         X₁ = X₀ - inv(∇∇(X₀)) * ∇(X₀)
 
         # convergence
@@ -184,67 +184,40 @@ function _newton_method(X₀::AbstractVector, ∇∇::Function, ∇::Function, F
     X₀
 end
 
-function _posterior(w::AbstractVector, α::AbstractVector,
-                    ϕ::AbstractMatrix, t::AbstractVector)
+function _solve_post_prob(w::AbstractVector, α::AbstractVector,
+                           ϕ::AbstractMatrix, t::AbstractVector)
     w = _newton_method(w,
-                       (w) -> _hessian(w, α, ϕ, t),
+                       (w) -> _log_solve_post_prob(w, α, ϕ, t),
                        (w) -> _gradient(w, α, ϕ, t),
-                       (w) -> _log_posterior(w, α, ϕ, t),
+                       (w) -> _hessian(w, α, ϕ, t),
                        )
 
     Σ = inv(_hessian(w, α, ϕ, t))
     w, Σ
 end
 
-SIZE = 100, 1000, 2300, 4300
+SIZE = 100, 1000 , 2300, 4300
 Train, TrainT = get_data("../data/training.csv", :class)
-spec  = RVMSpec(MLKernels.RadialBasisKernel(0.5), 50, identitize, 1e5, 1e-3)
 
-for S in SIZE
-    @show S
-    @time model = fit(spec, Train[1:S, :], TrainT[1:S])
-    @show mean(predict(model, Train) .== TrainT)
-    @show size(model.RV)
+for K in (MLKernels.LinearKernel(), MLKernels.RadialBasisKernel(), MLKernels.GaussianKernel())
+    @show "******************"
+    @show K
+    spec  = RVMSpec(K, 50, standard_score, 1e5, 1e-6)
+    for S in SIZE
+        @show S
+        @time model = fit(spec, Train[1:S, :], TrainT[1:S])
+        @show size(model.RV)
+        TrainP = predict(model, Train)
+        @show confusmat(2,
+                        labelencode(model.labelmap, TrainP),
+                        labelencode(model.labelmap, TrainT))
+        @show mean(TrainP .== TrainT)
 
-    Test, TestT = get_data("../data/testing.csv", :class)
-    @show mean(predict(model, Test) .== TestT)
-end
-
-#=
-using RDatasets
-
-iris = dataset("datasets", "iris")
-target = :Species
-
-iris[target]  = iris[target] .== "setosa"
-Train, TrainT = split_target(iris, target)
-spec  = RVMSpec(MLKernels.RadialBasisKernel(0.5), 50, identitize, 1e9, 1e-6)
-model = fit(spec, Train, TrainT)
-@show mean(predict(model, Train) .== TrainT)
-=#
-
-function basetesting()
-    X = [1 2; 3 4] * 1.0
-    Y = [5 6; 7 8] * 1.0
-    #kern = MLKernels.LinearKernel(0.5)
-    kern = MLKernels.RadialBasisKernel(0.5)
-    _  = MLKernels.kernelmatrix(kern, X, Y)
-    phi = [_ ones(size(_, 1))]
-    alpha = ones(3)
-    m = ones(3)
-    t = [1, 0]
-
-    #@show _log_posterior(m, alpha, phi, t)
-    #@show _gradient(m, alpha, phi, t)
-    #@show _hessian(m, alpha, phi, t)
-    #@show _posterior(m, alpha, phi, t)
-end
-
-function classtest()
-    X = [2 1; 1 2] * 1.0
-    t = ['A', 'B']
-    kern = MLKernels.RadialBasisKernel(0.5)
-    spec  = RVMSpec(kern, 50, identitize, 1e9, 1e-3)
-    model = fit(spec, X, t)
-    @show predict(model, [2 1; 1 2; 0 3] * 1.0)
+        Test, TestT = get_data("../data/testing.csv", :class)
+        TestP = predict(model, Test)
+        @show confusmat(2,
+                        labelencode(model.labelmap, TestP),
+                        labelencode(model.labelmap, TestT))
+        @show mean(TestP .== TestT)
+    end
 end
