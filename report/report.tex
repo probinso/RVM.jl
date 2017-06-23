@@ -76,7 +76,6 @@
 \author{Philip Robinson}
 \affil{Oregon Health Sciences University}
 
-
 \def\irls{iterative reweighted least squares}
 \def\IRLS{Iterative reweighted least squares}
 \def\rv{relevance vector\xspace}
@@ -106,9 +105,9 @@
 Due to my interest in \svm{}s, I selected to study \MT's \rvm.
 \RVM{}s are sparse models that yield probabilistic predictions
 for supervised classification and regression problems. \SVM{}s,
-identify a maximal margin hyperplane that seperates your data
+identify a maximal margin hyperplane that separates your data
 (with some associated cost parameter). Alternatively, \rvm{}s
-fit a gaussian about this decision boundary, whose variance
+fit a Gaussian about this decision boundary, whose variance
 are described by fitting \rv{}s. I provide the first \rvm
 implementation in \julia.
 
@@ -119,7 +118,7 @@ where $m$ counts the general non-linear and fixed basis
 functions, described below.
 \[\Phi(\vec{x}) = \left[\phi_1(\vec{x}), \dots, \phi_m(\vec{x})\right]^\intercal\]
 Our usual goal is to predict $\vec{w}$, our weights.
-\MT's paper provides a bayesian approach for estimating
+\MT's paper provides a Bayesian approach for estimating
 $\vec{w}$ from this linear form.
 
 Since the \rvm is based on the \svm, we apply this method to
@@ -127,22 +126,22 @@ Since the \rvm is based on the \svm, we apply this method to
 Which shares our same goal (of minimizing critical weights).
 We now fit $\vec{\alpha}$, which describe the inverse variance
 associated with each weight.
-\[p(\vec{w}|\vec{\alpha}) = \prod\mathcal{N}(w_i |\mu,\alpha_i^{-1})\]
+\[p(\vec{w}|\vec{\mu},\vec{\alpha}) = \prod\mathcal{N}(w_i |\mu,\alpha_i^{-1})\]
 
 In both \svm{}s and \rvm{}s, it is completely possible for
 every point \(\{\vec{x}_n\}\) to be represented with a with a
-weight $w_n$, which should be interpreted as overfitting. In
+weight $w_n$, which should be interpreted as over-fitting. In
 \svm{}s, the use of margin/cost parameters dissuade this result.
-In \rvm{}s, we achieve the same effect by fitting to a gaussian
+In \rvm{}s, we achieve the same effect by fitting to a Gaussian
 about these weights.
 
 For a potential \rv $\phi(\vec{x_i})$ As $\alpha_i$ becomes large,
 $\alpha_i^{-1}$ becomes small, resulting in a non-informative
-associated gaussian. These \rv{}s are down-selected, along
-with their associated hyperparameters.
+associated Gaussian. These \rv{}s are down-selected, along
+with their associated hyper-parameters.
 
 As this is a classification problem, Once the \rv{}s are identified
-and their assiciated weight gaussians are fit, a logistic sigmoid
+and their associated weight Gaussian are fit, a logistic sigmoid
 function $\dot{\sigma}$ is applied to the predicted probability.
 
 \[P(t\equiv 1|\vec{w}) = \prod_{i\in \{t_i \equiv 1\}}\dot{\sigma}(y(\vec{x}_n, \vec{w})) \prod_{i\in \{t_i \not\equiv 1\}}\left(1-\dot{\sigma}(y(\vec{x}_n, \vec{w}))\right)\]
@@ -175,7 +174,7 @@ w     & 132.4047758 & 201.3055556 & 125.4074074 & 373.8055556 & 23.22029498 \\
 \end{tabular}
 \end{table}
 
-The \wilt ships with two files, seperating test and traing
+The \wilt ships with two files, separating test and training
 information. The training set has 74 \texttt{w}ilting trees and
 4265 \texttt{n}ot. The test set has 187 \texttt{w}ilting trees
 and 313 \texttt{n}ot. The dataset is well described, and has no
@@ -184,10 +183,10 @@ missing values.
 \section{Implementation Details}
 My code was written to most closely resemble the implementation
 described in \MT's paper, using the same variable names at all
-steps (for clarity and knowlege transfer).
+steps (for clarity and knowledge transfer).
 
 To encourage eventual adoption into the \julia base, I use some
-standard libaries as resources. Firstly, I use \texttt{MLBase}
+standard libraries as resources. Firstly, I use \texttt{MLBase}
 for encoding/decoding of target classes in a standardized way.
 Secondly, I use \texttt{MLKernels}\footnote{depends on \juliaV}
 as my library of kernels used in machine learning algorithms.
@@ -197,11 +196,11 @@ $\Sigma$ for $\vec{w}$ with fixed $\vec{\alpha}$ (by fitting
 the posterior probability), then using those values to update
 $\vec{\alpha}$ and repeating, until $\vec{\alpha}$ converges.
 
-
 \subsection{Coding standards}
 The when solving for $\vec{\mu}$ and $\Sigma_{M,M}$ is performed
 using Newtons Method. All operations were broken out into simple
-segmanted functions to simplfy debugging and increase readability.
+segmented functions to simplify debugging and increase readability
+(exampled below).
 
 \begin{lstlisting}[mathescape=true]
 function _newton_method($X_0$::AbstractVector, F::Function, # Initial, Function
@@ -221,17 +220,15 @@ function _newton_method($X_0$::AbstractVector, F::Function, # Initial, Function
 end
 \end{lstlisting}
 
-
-
-\subsection{Workflow}
+\subsection{Use and workflow}
 To use the system, a \texttt{RVMSpec} is defined by parameters
 \begin{itemize}
   \setlength\itemsep{0em}
 \item kernel, selected from the \texttt{MLKernels} module
-\item maximum iterations, to prevent infinate loops
+\item maximum iterations, to prevent infinite loops
 \item normalization technique, like standard score transformation
-\item tollerance, a sufficient delta for $\alpha$ convergence
-\item threshold, a sufficient cuttoff for assumed infinate inverse variance
+\item tolerance, a sufficient delta for $\alpha$ convergence
+\item threshold, a sufficient cutoff for assumed infinite inverse variance
 \end{itemize}
 
 Next \texttt{fit} on their \texttt{RVMSpec} and data to
@@ -240,11 +237,102 @@ The {\em normalization technique} is applied to the prediction
 data, exactly as it was in the fitting process (ie. standard
 score uses the training mean and variance for every feature vector).
 
-\section{Evaluation Approach}
-For this evaluation I was interested in speed differences of \julia and \python for \rvm, and classification error of \rvm and \svm on the \wilt and \iris. I decided to include the \iris, as I was having trouble with overfitting the \wilt.
+\newpage
+\section{Evaluation}
+\def\linear{\texttt{linear}\xspace}
+\def\radial{\texttt{radialbasis}\xspace}
+\def\gaussian{\texttt{gaussian}\xspace}
+I report the confusion matrix and classification rate and number
+of relevance vectors on the \wilt. For this evaluation I trained
+against \linear and \gaussian kernels. I also varied the
+training sample count of 100, 1000, 2300, 4300. Finally, I include
+training times for each test.
 
-\section{Expirimental Results}
+\subsection{Lanuage Note}
+In my original proposal, I was interested in comparing runtimes
+of \python to \julia. This was abandonded because \python has
+swappable linear algebra libraries that made it very difficult to
+make this useful analysis. I also found that thresholds were a
+greater indicator of runtime.
+
+\subsection{\linear}
+We can clearly see from the table below that the data isn't linearly
+separable.
+
+\begin{table}[!h]
+\centering
+\caption{\linear}
+\label{linear}
+\begin{tabular}{l|llll}
+{\bf size} & {\bf time (s)} & {\bf \rv{}s} & {\bf classification} & {\bf matrix}\\\hline\\
+ 100 & 1.898 & 6 & .367& \begin{tabular}{l|ll}
+  & 1 & 2 \\\hline
+  1 & 187 & 312\\
+  2 & 0 & 1\\
+\end{tabular}\\\hline\\
+ 1000 & 2.057 & 1 & .626 & \begin{tabular}{l|ll}
+  & 1 & 2 \\\hline
+  1 & 0 & 0 \\
+  2 & 187 & 313\\
+\end{tabular}\\\hline\\
+ 2300 & 21.162 & 1 & .626 & \begin{tabular}{l|ll}
+  & 1 & 2 \\\hline
+  1 & 0 & 0 \\
+  2 & 187 & 313\\
+\end{tabular}\\\hline\\
+ 4300 & 231.225 & 1 & .626& \begin{tabular}{l|ll}
+  & 1 & 2 \\\hline
+  1 & 0 & 0 \\
+  2 & 187 & 313\\
+\end{tabular}\\
+\end{tabular}
+\end{table}
+
+\newpage
+\subsection{\gaussian}
+We can see that a \gaussian kernel performs much better than \linear.
+
+\begin{table}[!h]
+\centering
+\caption{\gaussian}
+\label{gaussian}
+\begin{tabular}{l|llll}
+  {\bf size} & {\bf time (s)}   & {\bf \rv{}s} & {\bf classification} & {\bf matrix}\\\hline\\
+ 100 & .09 & 5 & .822 & \begin{tabular}{l|ll}
+  & 1 & 2 \\\hline
+  1 & 181 & 83\\
+  2 & 6 & 230\\
+\end{tabular}\\\hline\\
+ 1000 & 4.253 & 11 & .824 & \begin{tabular}{l|ll}
+  & 1 & 2 \\\hline
+  1 & 123 & 24\\
+  2 & 64 & 289\\
+\end{tabular}\\\hline\\
+ 2300 & 36.53 & 12 & .81 & \begin{tabular}{l|ll}
+  & 1 & 2 \\\hline
+  1 & 112 & 20\\
+  2 & 75 & 293\\
+\end{tabular}\\\hline\\
+ 4300 & 257.77 & 15 & .784 & \begin{tabular}{l|ll}
+  & 1 & 2 \\\hline
+  1 & 99 & 20\\
+  2 & 88 & 293\\
+\end{tabular}\\
+\end{tabular}
+\end{table}
+
+\subsection{Conclusion}
+After my analysis I found that all the wilted training samples
+were at the head of the training file. It would be nice to repeat
+this with proportional sampling from these two groups.
+
 \section{Limitations}
-\section{References}
+There are a few simplifications that were made to complete
+this project in time. This implementation only supports
+non-informative priors on the fit Gaussian. I also heavily
+depend on matrix inversion, which aren't expected to scale.
+Finally, I only provide solutions to binary classification.
+In future work I would like to add support for multiple
+classifications and regression.
 
 \end{document}
