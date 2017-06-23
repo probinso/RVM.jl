@@ -1,4 +1,4 @@
-\documentclass[10pt,twocolumn]{article} % letterpaper is american!
+\documentclass[11pt]{article} % letterpaper is american!
 \usepackage[affil-it]{authblk}
 
 \usepackage[british,UKenglish,USenglish,english,american]{babel}
@@ -10,6 +10,8 @@
 \usepackage{tikz,pgf}
 \usetikzlibrary{fit}
 
+\usepackage{csvsimple}
+
 \pagestyle{empty}
 \setlength{\parindent}{0mm}
 \usepackage[letterpaper, margin=1in]{geometry}
@@ -19,6 +21,38 @@
 \usepackage{enumerate}
 
 \usepackage{verbatim}
+\usepackage{listings}
+
+\usepackage{color}
+
+%%
+%% Julia definition (c) 2014 Jubobs
+%%
+\lstdefinelanguage{Julia}%
+  {morekeywords={abstract,break,case,catch,const,continue,do,else,elseif,%
+      end,export,false,for,function,immutable,import,importall,if,in,%
+      macro,module,otherwise,quote,return,switch,true,try,type,typealias,%
+      using,while},%
+   sensitive=true,%
+   alsoother={$},%
+   morecomment=[l]\#,%
+   morecomment=[n]{\#=}{=\#},%
+   morestring=[s]{"}{"},%
+   morestring=[m]{'}{'},%
+}[keywords,comments,strings]%
+
+\lstset{%
+    language         = Julia,
+    basicstyle       = \footnotesize\ttfamily,,
+    keywordstyle     = \bfseries\color{blue},
+    stringstyle      = \color{magenta},
+    commentstyle     = \color{red},
+    showstringspaces = false,
+    backgroundcolor  = \color{lightgray},
+    numbers          = left,
+    title            = \lstname,
+    numberstyle      = \tiny\color{lightgray}\ttfamily,
+}
 
 \usepackage{xspace}
 \usepackage{url}
@@ -36,24 +70,179 @@
 \setlength{\parskip}{1em}
 \setlength{\parindent}{1em}
 
+
 \title{Relevance Vector Machine}
 \date{\today}
 \author{Philip Robinson}
 \affil{Oregon Health Sciences University}
 
+
+\def\irls{iterative reweighted least squares}
+\def\IRLS{Iterative reweighted least squares}
+\def\rv{relevance vector\xspace}
+\def\RVM{Relevance vector machine\xspace}
+\def\rvm{\rv machine\xspace}
+\def\SVM{Support vector machine\xspace}
+\def\svm{support vector machine\xspace}
+\def\julia{\texttt{julia}\xspace}
+\def\juliaV{\julia \texttt{0.4.7}\xspace}
+\def\python{\texttt{Python}\xspace}
+\def\MT{Michael Tipping\xspace}
+\def\wilt{UCI wilt dataset\xspace}
+\def\iris{UCI iris dataset\xspace}
+
+
 \begin{document}
 \maketitle
-\cofeAm{1}{1.0}{0}{5.5cm}{3cm}
-\cofeCm{0.9}{1}{180}{0}{0}
-\begin{abstract}
-\end{abstract}
+%\cofeAm{1}{1.0}{0}{5.5cm}{3cm}
+%\cofeCm{0.5}{0.5}{180}{0}{0}
+%\begin{abstract}
+%\end{abstract}
 
 %\section*{General Terms}
 %\section*{Keywords}
+
 \section{Introduction}
+Due to my interest in \svm{}s, I selected to study \MT's \rvm.
+\RVM{}s are sparse models that yield probabilistic predictions
+for supervised classification and regression problems. \SVM{}s,
+identify a maximal margin hyperplane that seperates your data
+(with some associated cost parameter). Alternatively, \rvm{}s
+fit a gaussian about this decision boundary, whose variance
+are described by fitting \rv{}s. I provide the first \rvm
+implementation in \julia.
+
+\subsection{\RVM}
+Usually our predictions, modeled by
+\[y(\vec{x}; \vec{w}) = \sum_{i=1}^m w_i \Phi(\vec{x})\]
+where $m$ counts the general non-linear and fixed basis
+functions, described below.
+\[\Phi(\vec{x}) = \left[\phi_1(\vec{x}), \dots, \phi_m(\vec{x})\right]^\intercal\]
+Our usual goal is to predict $\vec{w}$, our weights.
+\MT's paper provides a bayesian approach for estimating
+$\vec{w}$ from this linear form.
+
+Since the \rvm is based on the \svm, we apply this method to
+\[y(\vec{x},\vec{w})=\sum_{i=1}^n w_i\cdot K(\vec{x}, \vec{x_i}) + w_0\]
+Which shares our same goal (of minimizing critical weights).
+We now fit $\vec{\alpha}$, which describe the inverse variance
+associated with each weight.
+\[p(\vec{w}|\vec{\alpha}) = \prod\mathcal{N}(w_i |\mu,\alpha_i^{-1})\]
+
+In both \svm{}s and \rvm{}s, it is completely possible for
+every point \(\{\vec{x}_n\}\) to be represented with a with a
+weight $w_n$, which should be interpreted as overfitting. In
+\svm{}s, the use of margin/cost parameters dissuade this result.
+In \rvm{}s, we achieve the same effect by fitting to a gaussian
+about these weights.
+
+For a potential \rv $\phi(\vec{x_i})$ As $\alpha_i$ becomes large,
+$\alpha_i^{-1}$ becomes small, resulting in a non-informative
+associated gaussian. These \rv{}s are down-selected, along
+with their associated hyperparameters.
+
+As this is a classification problem, Once the \rv{}s are identified
+and their assiciated weight gaussians are fit, a logistic sigmoid
+function $\dot{\sigma}$ is applied to the predicted probability.
+
+\[P(t\equiv 1|\vec{w}) = \prod_{i\in \{t_i \equiv 1\}}\dot{\sigma}(y(\vec{x}_n, \vec{w})) \prod_{i\in \{t_i \not\equiv 1\}}\left(1-\dot{\sigma}(y(\vec{x}_n, \vec{w}))\right)\]
+
 \section{Dataset}
+Since I was most interested in classification problems, I
+selected to analyze \wilt. This dataset provides summary
+statistics of color channels from images of sick and healthy
+trees. This remote sensing problem is important to solve, as
+it would significantly reduce the costs of assessing the
+health of observed trees.
+
+\begin{table}[!h]
+\centering
+\caption{wilt\_training.csv}
+\label{wilt_training.csv}
+\begin{tabular}{llllll}
+  {\bf class} & {\bf GLCM\_pan}   & {\bf Mean\_Green} & {\bf Mean\_Red}   & {\bf Mean\_NIR}   & {\bf SD\_pan} \\\hline\\
+n     & 132.2993039 & 203.4074074 & 90          & 495.4074074 & 36.94377146 \\
+n     & 124.0184758 & 170.9272727 & 69.07272727 & 217.8363636 & 13.33725287 \\
+w     & 122.7978339 & 202.3428571 & 132.4857143 & 322.2857143 & 15.8353776  \\
+w     & 113.6561798 & 213.1071429 & 129.7857143 & 480.8571429 & 29.23776563 \\
+w     & 147.7711268 & 220.1111111 & 123.7222222 & 479.1666667 & 23.33703674 \\
+n     & 112.8245614 & 236.92      & 108.04      & 705.84      & 22.67065063 \\
+w     & 134.4980916 & 210.2121212 & 116.9090909 & 594.8484848 & 27.93768482 \\
+w     & 132.4047758 & 201.3055556 & 125.4074074 & 373.8055556 & 23.22029498 \\
+%w     & 118.1225854 & 217.8941176 & 134.2352941 & 443.1117647 & 18.37603091 \\
+%n     & 127.3958333 & 200.3333333 & 99.16666667 & 486.1666667 & 26.02349366 \\
+\vdots
+\end{tabular}
+\end{table}
+
+The \wilt ships with two files, seperating test and traing
+information. The training set has 74 \texttt{w}ilting trees and
+4265 \texttt{n}ot. The test set has 187 \texttt{w}ilting trees
+and 313 \texttt{n}ot. The dataset is well described, and has no
+missing values.
+
 \section{Implementation Details}
+My code was written to most closely resemble the implementation
+described in \MT's paper, using the same variable names at all
+steps (for clarity and knowlege transfer).
+
+To encourage eventual adoption into the \julia base, I use some
+standard libaries as resources. Firstly, I use \texttt{MLBase}
+for encoding/decoding of target classes in a standardized way.
+Secondly, I use \texttt{MLKernels}\footnote{depends on \juliaV}
+as my library of kernels used in machine learning algorithms.
+
+The optimization uses \irls, first solving for $\vec{\mu}$ and
+$\Sigma$ for $\vec{w}$ with fixed $\vec{\alpha}$ (by fitting
+the posterior probability), then using those values to update
+$\vec{\alpha}$ and repeating, until $\vec{\alpha}$ converges.
+
+
+\subsection{Coding standards}
+The when solving for $\vec{\mu}$ and $\Sigma_{M,M}$ is performed
+using Newtons Method. All operations were broken out into simple
+segmanted functions to simplfy debugging and increase readability.
+
+\begin{lstlisting}[mathescape=true]
+function _newton_method($X_0$::AbstractVector, F::Function, # Initial, Function
+                        $\nabla$::Function, $\nabla\nabla$::Function)          # Gradient, Hessian
+  while true
+    # @show F($X_0$) # uncomment to watch converge
+    $X_1$ = $X_0$ - inv($\nabla\nabla(X_0)$) * $\nabla(X_0)$
+
+    # convergence
+    $\Delta{}X$ = maximum(abs($X_1$ .- $X_0$))
+    $X_0$ = $X_1$[1:end]
+    if $\Delta{}X$ < 1e-3
+      break
+    end
+  end
+  $X_0$
+end
+\end{lstlisting}
+
+
+
+\subsection{Workflow}
+To use the system, a \texttt{RVMSpec} is defined by parameters
+\begin{itemize}
+  \setlength\itemsep{0em}
+\item kernel, selected from the \texttt{MLKernels} module
+\item maximum iterations, to prevent infinate loops
+\item normalization technique, like standard score transformation
+\item tollerance, a sufficient delta for $\alpha$ convergence
+\item threshold, a sufficient cuttoff for assumed infinate inverse variance
+\end{itemize}
+
+Next \texttt{fit} on their \texttt{RVMSpec} and data to
+generate an \texttt{RVMFit}, which can then be used for predictions.
+The {\em normalization technique} is applied to the prediction
+data, exactly as it was in the fitting process (ie. standard
+score uses the training mean and variance for every feature vector).
+
 \section{Evaluation Approach}
+For this evaluation I was interested in speed differences of \julia and \python for \rvm, and classification error of \rvm and \svm on the \wilt and \iris. I decided to include the \iris, as I was having trouble with overfitting the \wilt.
+
 \section{Expirimental Results}
 \section{Limitations}
 \section{References}
