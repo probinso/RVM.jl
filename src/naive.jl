@@ -137,7 +137,7 @@ function _classify(μ::AbstractVector, ϕ::AbstractMatrix)
 end
 
 function _log_solve_post_prob(w::AbstractVector, α::AbstractVector,
-                               ϕ::AbstractMatrix, t::AbstractVector)
+                              ϕ::AbstractMatrix, t::AbstractVector)
     #@show "_log_post_probability"
     A = diagm(α)
     y = _classify(w, ϕ)
