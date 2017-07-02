@@ -126,6 +126,7 @@ Since the \rvm is based on the \svm, we apply this method to
 Which shares our same goal (of minimizing critical weights).
 We now fit $\vec{\alpha}$, which describe the inverse variance
 associated with each weight.
+
 \[p(\vec{w}|\vec{\mu},\vec{\alpha}) = \prod\mathcal{N}(w_i |\mu,\alpha_i^{-1})\]
 
 In both \svm{}s and \rvm{}s, it is completely possible for
@@ -144,7 +145,7 @@ As this is a classification problem, Once the \rv{}s are identified
 and their associated weight Gaussian are fit, a logistic sigmoid
 function $\dot{\sigma}$ is applied to the predicted probability.
 
-\[P(t\equiv 1|\vec{w}) = \prod_{i\in \{t_i \equiv 1\}}\dot{\sigma}(y(\vec{x}_n, \vec{w})) \prod_{i\in \{t_i \not\equiv 1\}}\left(1-\dot{\sigma}(y(\vec{x}_n, \vec{w}))\right)\]
+\[\dot{\sigma}\left(y(\vec{x}; \vec{w})\right)\]
 
 \section{Dataset}
 Since I was most interested in classification problems, I
