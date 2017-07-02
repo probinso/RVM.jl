@@ -5,4 +5,4 @@
 
 
 
-Support Relevance Machines
+Relevance Vector Machines
